@@ -1,4 +1,9 @@
-"""Parse Markdown headings and compute gross section byte sizes."""
+"""Analyze Markdown heading structure and exact gross section byte sizes.
+
+Markdown syntax is parsed with ``markdown-it-py`` while byte boundaries are
+calculated independently from the original source bytes. This separation keeps
+heading recognition CommonMark-aware without losing file-level byte fidelity.
+"""
 
 from __future__ import annotations
 
@@ -12,7 +17,17 @@ from markdown_it.token import Token
 
 @dataclass(slots=True)
 class Section:
-    """A parser-recognized Markdown heading and its gross byte extent."""
+    """Represent one parser-recognized heading-defined section.
+
+    Attributes:
+        markdown_level: Markdown heading level (1 through 6).
+        structural_level: Depth in the derived section hierarchy.
+        path: One-based sibling indexes forming the section's dotted path.
+        heading: Plain display text extracted from the parsed heading.
+        start_line: Zero-based source line on which the heading begins.
+        start_byte: Inclusive byte offset of the heading's source line.
+        end_byte: Exclusive byte offset of the gross section boundary.
+    """
 
     markdown_level: int
     structural_level: int
@@ -24,16 +39,25 @@ class Section:
 
     @property
     def byte_count(self) -> int:
+        """Return the gross section size in original source bytes."""
+
         return self.end_byte - self.start_byte
 
     @property
     def dotted_path(self) -> str:
+        """Return the hierarchy path as a dot-separated one-based index."""
+
         return ".".join(str(part) for part in self.path)
 
 
 @dataclass(slots=True)
 class Analysis:
-    """Analysis result for one Markdown byte stream."""
+    """Contain the complete section analysis for one Markdown byte stream.
+
+    Attributes:
+        sections: Heading-defined sections in source order.
+        total_bytes: Length of the unmodified input byte stream.
+    """
 
     sections: list[Section]
     total_bytes: int
@@ -65,7 +89,11 @@ def _line_start_offsets(data: bytes) -> list[int]:
 
 
 def _plain_heading_text(inline: Token) -> str:
-    """Extract display text from a heading's inline token children."""
+    """Return plain display text from a heading's inline token children.
+
+    Formatting tokens are omitted, inline code contributes its literal content,
+    and soft or hard line breaks are normalized to spaces for tabular display.
+    """
 
     children = inline.children or []
     pieces: list[str] = []
@@ -103,7 +131,21 @@ def _iter_headings(tokens: list[Token]) -> Iterable[tuple[int, int, str]]:
 
 
 def analyze_bytes(data: bytes) -> Analysis:
-    """Analyze UTF-8 Markdown from its original byte representation."""
+    """Analyze UTF-8 Markdown from its original byte representation.
+
+    Args:
+        data: Original Markdown file bytes. UTF-8 with or without a BOM is
+            accepted.
+
+    Returns:
+        An :class:`Analysis` containing all heading-defined sections in source
+        order and the original stream length.
+
+    Raises:
+        UnicodeDecodeError: If *data* is not valid UTF-8.
+        ValueError: If parser source metadata is internally inconsistent with
+            the original byte stream.
+    """
 
     text = data.decode("utf-8-sig")
     tokens = MarkdownIt("commonmark").parse(text)
@@ -151,6 +193,18 @@ def analyze_bytes(data: bytes) -> Analysis:
 
 
 def analyze_file(path: str | Path) -> Analysis:
-    """Read and analyze a Markdown file without modifying its bytes."""
+    """Read and analyze a Markdown file without modifying its bytes.
+
+    Args:
+        path: Path to the Markdown source file.
+
+    Returns:
+        The analysis produced from the file's exact byte content.
+
+    Raises:
+        OSError: If the file cannot be read.
+        UnicodeDecodeError: If the file is not valid UTF-8.
+        ValueError: If parser source metadata is inconsistent with the input.
+    """
 
     return analyze_bytes(Path(path).read_bytes())

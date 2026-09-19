@@ -1,4 +1,8 @@
-"""Console and Markdown report rendering."""
+"""Render analyzed sections as console text or Markdown reports.
+
+Both renderers share identical grouping semantics: structural levels are emitted
+in ascending order and nested levels are partitioned by their immediate parent.
+"""
 
 from __future__ import annotations
 
@@ -38,6 +42,8 @@ def _group_sections(
 
 
 def _group_title(level: int, parent: Section | None) -> str:
+    """Return the human-readable title for one report group."""
+
     if parent is None:
         return "Heading level 1"
     return (
@@ -47,6 +53,8 @@ def _group_title(level: int, parent: Section | None) -> str:
 
 
 def _format_console_table(rows: list[Section]) -> list[str]:
+    """Format one section group as aligned plain-text table rows."""
+
     paths = [row.dotted_path for row in rows]
     sizes = [f"{row.byte_count:,}" for row in rows]
     path_width = max(len("Path"), *(len(value) for value in paths))
@@ -65,6 +73,8 @@ def _escape_markdown_cell(value: str) -> str:
 
 
 def _format_markdown_table(rows: list[Section]) -> list[str]:
+    """Format one section group as a Markdown pipe table."""
+
     lines = [
         "| Path | Bytes | Heading |",
         "| :--- | ---: | :--- |",
@@ -80,6 +90,8 @@ def _render_groups(
     title: Callable[[int, Section | None], str],
     table: Callable[[list[Section]], list[str]],
 ) -> list[str]:
+    """Render all structural groups using supplied title and table formatters."""
+
     blocks: list[str] = []
     for level, parent, rows in _group_sections(analysis):
         blocks.append("\n".join([title(level, parent), "", *table(rows)]))
@@ -87,7 +99,14 @@ def _render_groups(
 
 
 def render_report(analysis: Analysis) -> str:
-    """Render a plain-text console report."""
+    """Render an analysis as the aligned plain-text console report.
+
+    Args:
+        analysis: Completed Markdown section analysis.
+
+    Returns:
+        A newline-terminated report suitable for stdout.
+    """
 
     if not analysis.sections:
         return "No headings found.\n"
@@ -97,7 +116,14 @@ def render_report(analysis: Analysis) -> str:
 
 
 def render_markdown_report(analysis: Analysis) -> str:
-    """Render a Markdown report with heading-group sections and tables."""
+    """Render an analysis as Markdown heading groups and pipe tables.
+
+    Args:
+        analysis: Completed Markdown section analysis.
+
+    Returns:
+        A newline-terminated Markdown document suitable for ``*.stats.md``.
+    """
 
     if not analysis.sections:
         return "No headings found.\n"

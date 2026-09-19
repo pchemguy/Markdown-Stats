@@ -1,4 +1,8 @@
-"""Command-line interface for markdown-stats."""
+"""Command-line interface for the ``markdown-stats`` utility.
+
+The CLI supports direct console output and sibling Markdown report generation.
+All user-facing failures are normalized to concise diagnostics on stderr.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ _MARKDOWN_FORMATS = {"markdown", "md"}
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build and return the command-line argument parser."""
+
     parser = argparse.ArgumentParser(
         prog="markdown-stats",
         description="Report gross byte counts for Markdown heading-defined sections.",
@@ -32,7 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def markdown_output_path(target: Path) -> Path:
-    """Return the Markdown-report path for *target*."""
+    """Derive the sibling Markdown report path for *target*.
+
+    The final suffix, when present, is replaced with ``.stats.md``; otherwise
+    ``.stats.md`` is appended to the filename.
+    """
 
     if target.suffix:
         return target.with_suffix(".stats.md")
@@ -40,6 +50,17 @@ def markdown_output_path(target: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the command-line application and return its process exit status.
+
+    Args:
+        argv: Optional argument vector excluding the executable name. ``None``
+            delegates argument collection to :mod:`argparse`.
+
+    Returns:
+        ``0`` on success or ``1`` for file, decoding, or analysis failures.
+        Invalid command-line usage is handled by :mod:`argparse` itself.
+    """
+
     args = build_parser().parse_args(argv)
 
     try:

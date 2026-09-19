@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "markdown-stats"
-version = "0.1.0"
+version = "0.2.0"
 description = "Report gross byte counts for Markdown heading-defined sections."
 readme = "README.md"
 requires-python = ">=3.11"

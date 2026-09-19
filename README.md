@@ -1,6 +1,12 @@
-# markdown-section-stats
+# Markdown Stats
 
 A small CLI utility that reports the **gross byte size** of each Markdown heading-defined section. Parent section sizes include all descendant sections. Heading-looking text inside fenced code blocks is ignored because headings are recognized by `markdown-it-py`, not by regular expressions.
+
+> [!IMPORTANT]
+> 
+> **AI-Assisted Development Disclosure**
+> 
+> This project has been developed with extensive generative-AI assistance. Assistance covered project exploration, design discussion, specification development, implementation, testing, technical review, and documentation. See [AI_DISCLOSURE.md](AI_DISCLOSURE.md) for further details. Responsibility for the published software remains with the maintainer.
 
 ## Install
 
