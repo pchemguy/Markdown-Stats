@@ -1,0 +1,137 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "markdown-stats"
+version = "0.1.0"
+description = "Report gross byte counts for Markdown heading-defined sections."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "markdown-it-py",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy",
+    "pytest",
+    "ruff",
+]
+lint = [
+    "ruff",
+    "mypy",
+]
+test = [
+    "pytest",
+    "coverage",
+]
+
+[project.scripts]
+markdown-stats = "markdown_stats.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest]
+addopts = ["-ra", "-q", "--strict-markers"]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["archive_line_index"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+# Match Black defaults to minimize surprise.
+line-length = 88
+indent-width = 4
+respect-gitignore = true
+src = ["src", "tests"]
+# Keep CI noise down; allow intentional "unused" patterns.
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "__pypackages__",
+    ".mypy_cache",
+    ".pytest_cache",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+# Black-like formatting.
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "ANN", # flake8 type annotations
+    #"SIM",
+    #"RUF", # ruff-specific rules
+]
+
+# Avoid overreach / churny style rules that don't pay for themselves in R&D code.
+ignore = [
+    "E501",   # line length: formatter handles wrapping; keep lint silent
+    "B008",   # function calls in defaults; common/acceptable for small factories in research code
+]
+
+# Enable autofix, but keep it safe and unsurprising.
+fixable = ["ALL"]
+unfixable = [
+    # Don't let auto-fix rewrite exception messages / f-strings in ways you don't expect.
+    # (Optional; remove if you want aggressive rewrites.)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can be looser.
+"tests/**/*.py" = [
+    "E402",   # imports not at top (fixtures sometimes)
+    "F811",   # redefinition (pytest param fixtures can trip this)
+    "B018",   # useless expression (sometimes used as markers)
+]
+
+# __init__.py often intentionally re-exports.
+"**/__init__.py" = ["F401"]
+
+# Script-ish entrypoints / notebooks-exported files often need some flexibility.
+"scripts/**/*.py" = ["E402", "F401"]
+
+[tool.ruff.lint.isort]
+# Keep imports stable across the repo; update if your top-level package differs.
+known-first-party = ["archive_line_index"]
+combine-as-imports = true
+
+[tool.mypy]
+strict = true
+files = ["src"]
+warn_unused_configs = true
+warn_return_any = true
+disallow_untyped_defs = true
+
+[tool.flowmark]
+width = 88
+semantic = false
+smartquotes = false
+ellipses = false
+cleanups = true
+list-spacing = "preserve"
