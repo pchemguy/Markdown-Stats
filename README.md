@@ -11,16 +11,32 @@ python -m pip install .
 ## Use
 
 ```console
-markdown-stats TARGET
+markdown-stats TARGET [--format FORMAT]
 ```
 
 For example:
 
 ```console
 markdown-stats docs/dev/SPEC.md
+markdown-stats docs/dev/SPEC.md --format md
 ```
 
-Output is grouped first by structural heading level and then by parent:
+`--format` accepts:
+
+- `stdout`, `console`, or `con` — default console output to stdout;
+- `markdown` or `md` — write a sibling Markdown report file.
+
+For Markdown output, the target's final suffix is replaced with `.stats.md`:
+
+```text
+path/dev.md -> path/dev.stats.md
+```
+
+A suffixless target such as `README` produces `README.stats.md`. Markdown mode writes no report to stdout and does not modify the source file.
+
+## Console output
+
+Console output is grouped first by structural heading level and then by parent:
 
 ```text
 Heading level 1
@@ -37,7 +53,29 @@ Path   Bytes   Heading
 2.2    23,202   Data model
 ```
 
-The actual renderer sizes `Path` and `Bytes` columns to each table and right-aligns byte counts.
+The console renderer sizes `Path` and `Bytes` columns to each table and right-aligns byte counts.
+
+## Markdown output
+
+Markdown output uses Markdown headings for group headers and pipe tables for data. The group heading level matches the structural level being reported:
+
+```markdown
+# Heading level 1
+
+| Path | Bytes | Heading |
+| :--- | ---: | :--- |
+| 1 | 12,481 | Introduction |
+| 2 | 38,194 | Architecture |
+
+## Heading level 2 — parent 2: Architecture
+
+| Path | Bytes | Heading |
+| :--- | ---: | :--- |
+| 2.1 | 14,992 | Components |
+| 2.2 | 23,202 | Data model |
+```
+
+Literal Markdown table delimiters in heading text are escaped so they remain in a single `Heading` cell.
 
 ## Semantics
 

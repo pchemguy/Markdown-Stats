@@ -11,6 +11,7 @@ The utility shall:
 * preserve document order;
 * derive a hierarchical dotted path for every heading;
 * report sections grouped by structural depth and parent;
+* support console and Markdown report formats;
 * measure section sizes against the original file bytes.
 
 Use `markdown-it-py` for Markdown parsing.
@@ -20,7 +21,7 @@ Use `markdown-it-py` for Markdown parsing.
 Invocation:
 
 ```text
-markdown-stats TARGET
+markdown-stats TARGET [--format FORMAT]
 ```
 
 `TARGET` is the path to the Markdown file to analyze.
@@ -29,13 +30,27 @@ Example:
 
 ```text
 markdown-stats docs/dev/SPEC.md
+markdown-stats docs/dev/SPEC.md --format md
 ```
 
-The report is written to stdout.
+`--format` is optional and accepts these aliases:
+
+* `stdout`, `console`, or `con` — console output; this is the default and preserves the existing behavior;
+* `markdown` or `md` — Markdown file output.
+
+In console mode, write the report to stdout.
+
+In Markdown mode, write a sibling report file by replacing the target's final suffix with `.stats.md`. For example:
+
+```text
+path/dev.md -> path/dev.stats.md
+```
+
+If the target has no suffix, append `.stats.md`, for example `README -> README.stats.md`. Markdown mode shall not write the report to stdout and shall not modify the target file. The generated Markdown file shall be UTF-8 with LF newlines.
 
 Diagnostics are written to stderr.
 
-A successful run exits with status `0`. Invalid CLI usage or an unreadable/invalid target exits nonzero.
+A successful run exits with status `0`. Invalid CLI usage, an unreadable/invalid target, or failure to write the Markdown report exits nonzero.
 
 ## 3. Input handling
 
@@ -165,15 +180,21 @@ Do not compute final byte counts by slicing decoded text and calling `.encode()`
 
 ## 8. Output organization
 
-Output plain text tables.
+Both output formats use the same logical grouping and row order.
 
-First emit all structural-level-1 headings in document order.
+First emit all structural-level-1 headings in document order. Then emit structural-level-2 headings grouped by parent, and continue similarly for deeper levels. Each group has a descriptive header.
 
-Then emit structural-level-2 headings, grouped by their parent.
+The columns shall always appear in this order:
 
-Continue similarly for deeper levels.
+```text
+Path   Bytes   Heading
+```
 
-Each group has a descriptive header.
+`Heading` is last because heading text may be long. Byte counts use thousands separators. Heading text is never truncated.
+
+### 8.1 Console format
+
+`stdout`, `console`, and `con` render plain-text tables to stdout.
 
 Top-level example:
 
@@ -196,33 +217,33 @@ Path   Bytes     Heading
 2.2    23,202    Data model
 ```
 
-Deeper example:
+Within each console table, size `Path` and `Bytes` columns from the rows in that table and right-align `Bytes`. Separate table groups clearly with blank lines.
 
-```text
-Heading level 3 — parent 2.2: Data model
+### 8.2 Markdown format
 
-Path    Bytes     Heading
-2.2.1    8,817    Records
-2.2.2   14,385    Indexes
+`markdown` and `md` render a valid Markdown document to the `.stats.md` output file.
+
+Use Markdown headings for group headers, with the Markdown heading level equal to the structural level being reported. Use Markdown pipe tables for all data tables and right-align the `Bytes` column via the table alignment row.
+
+Example:
+
+```markdown
+# Heading level 1
+
+| Path | Bytes | Heading |
+| :--- | ---: | :--- |
+| 1 | 12,481 | Introduction |
+| 2 | 38,194 | Architecture |
+
+## Heading level 2 — parent 2: Architecture
+
+| Path | Bytes | Heading |
+| :--- | ---: | :--- |
+| 2.1 | 14,992 | Components |
+| 2.2 | 23,202 | Data model |
 ```
 
-The columns shall appear in this order:
-
-```text
-Path   Bytes   Heading
-```
-
-`Heading` is last because heading text may be long.
-
-Within each table:
-
-* preserve document order;
-* right-align `Bytes`;
-* format byte counts with thousands separators;
-* size `Path` and `Bytes` columns from the rows in that table;
-* do not truncate heading text.
-
-Separate table groups clearly with blank lines.
+Escape heading text as required so literal Markdown table delimiters, especially `|`, cannot split a cell.
 
 ## 9. Heading text
 
@@ -274,8 +295,11 @@ read bytes
 → construct heading hierarchy
 → calculate gross section boundaries
 → group rows by structural depth and parent
-→ render report
+→ render selected format
+→ stdout or .stats.md
 ```
+
+Keep analysis independent of report rendering so console and Markdown formats consume the same section model and byte counts.
 
 Do not implement Markdown heading recognition manually.
 
@@ -300,4 +324,10 @@ The implementation is complete when automated tests demonstrate that:
 11. output groups headings by structural level and parent;
 12. output columns are ordered `Path`, `Bytes`, `Heading`;
 13. long heading text is not truncated;
-14. headings inside fenced blocks never split sections.
+14. headings inside fenced blocks never split sections;
+15. omitted `--format`, `--format stdout`, `--format console`, and `--format con` all produce the existing console report on stdout;
+16. `--format markdown` and `--format md` produce the sibling `.stats.md` file and no report on stdout;
+17. Markdown group headers use Markdown heading syntax matching structural level;
+18. Markdown reports use valid pipe tables with a right-aligned `Bytes` column and escaped heading-cell delimiters;
+19. Markdown output naming replaces the final target suffix with `.stats.md`, or appends `.stats.md` when the target has no suffix;
+20. Markdown output does not modify the source target and write failures are reported as errors.

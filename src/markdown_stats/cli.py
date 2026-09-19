@@ -7,7 +7,10 @@ import sys
 from pathlib import Path
 
 from .analysis import analyze_file
-from .report import render_report
+from .report import render_markdown_report, render_report
+
+_CONSOLE_FORMATS = {"stdout", "console", "con"}
+_MARKDOWN_FORMATS = {"markdown", "md"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,7 +19,24 @@ def build_parser() -> argparse.ArgumentParser:
         description="Report gross byte counts for Markdown heading-defined sections.",
     )
     parser.add_argument("target", type=Path, help="Markdown file to analyze")
+    parser.add_argument(
+        "--format",
+        choices=["stdout", "console", "con", "markdown", "md"],
+        default="stdout",
+        help=(
+            "output format: stdout/console/con (default) writes the console report "
+            "to stdout; markdown/md writes TARGET as a sibling *.stats.md file"
+        ),
+    )
     return parser
+
+
+def markdown_output_path(target: Path) -> Path:
+    """Return the Markdown-report path for *target*."""
+
+    if target.suffix:
+        return target.with_suffix(".stats.md")
+    return target.with_name(f"{target.name}.stats.md")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,11 +44,22 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         analysis = analyze_file(args.target)
+
+        if args.format in _CONSOLE_FORMATS:
+            sys.stdout.write(render_report(analysis))
+        elif args.format in _MARKDOWN_FORMATS:
+            output_path = markdown_output_path(args.target)
+            output_path.write_text(
+                render_markdown_report(analysis),
+                encoding="utf-8",
+                newline="\n",
+            )
+        else:  # pragma: no cover - argparse choices make this unreachable
+            raise ValueError(f"unsupported output format: {args.format}")
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         print(f"markdown-stats: error: {exc}", file=sys.stderr)
         return 1
 
-    sys.stdout.write(render_report(analysis))
     return 0
 
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from markdown_stats.analysis import analyze_bytes
-from markdown_stats.report import render_report
+from markdown_stats.report import render_markdown_report, render_report
 
 
 def test_no_headings_report() -> None:
-    assert render_report(analyze_bytes(b"plain text\n")) == "No headings found.\n"
+    analysis = analyze_bytes(b"plain text\n")
+    assert render_report(analysis) == "No headings found.\n"
+    assert render_markdown_report(analysis) == "No headings found.\n"
 
 
 def test_report_groups_by_level_and_parent_in_document_order() -> None:
@@ -47,3 +49,37 @@ def test_long_heading_is_not_truncated() -> None:
     data = f"# {heading}\nbody\n".encode()
     report = render_report(analyze_bytes(data))
     assert heading.rstrip() in report
+
+
+def test_markdown_report_uses_heading_levels_and_tables() -> None:
+    data = b"# A\na\n## B\nb\n### C\nc\n# D\nd\n"
+    report = render_markdown_report(analyze_bytes(data))
+
+    assert report.startswith("# Heading level 1\n\n| Path | Bytes | Heading |")
+    assert "## Heading level 2 — parent 1: A" in report
+    assert "### Heading level 3 — parent 1.1: B" in report
+    assert "| :--- | ---: | :--- |" in report
+    assert "| 1.1.1 |" in report
+
+
+def test_markdown_report_groups_same_level_by_parent() -> None:
+    data = b"# A\n## A1\n# B\n## B1\n"
+    report = render_markdown_report(analyze_bytes(data))
+
+    first = report.index("## Heading level 2 — parent 1: A")
+    second = report.index("## Heading level 2 — parent 2: B")
+    assert first < second
+    assert "| 1.1 |" in report[first:second]
+    assert "| 2.1 |" in report[second:]
+
+
+def test_markdown_table_escapes_pipe_and_backslash_in_heading() -> None:
+    data = b"# A | B \\ C\nbody\n"
+    report = render_markdown_report(analyze_bytes(data))
+    assert r"A \| B \\ C" in report
+
+
+def test_markdown_bytes_use_thousands_separators() -> None:
+    data = b"# A\n" + (b"x" * 12_000) + b"\n# B\nq\n"
+    report = render_markdown_report(analyze_bytes(data))
+    assert "| 1 | 12,005 | A |" in report
