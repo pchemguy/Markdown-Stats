@@ -4,35 +4,189 @@
 
 Implement a small CLI utility that analyzes a Markdown file and reports the gross byte size of every heading-defined section.
 
-The utility shall parse Markdown structurally with `markdown-it-py`, ignore heading-like text inside fenced code blocks, preserve document order, derive hierarchical dotted paths, group output by structural depth and parent, and measure section sizes against the original file bytes.
+The utility shall:
+
+* parse Markdown structurally rather than with regular expressions;
+* ignore heading-like text inside fenced code blocks;
+* preserve document order;
+* derive a hierarchical dotted path for every heading;
+* report sections grouped by structural depth and parent;
+* measure section sizes against the original file bytes.
+
+Use `markdown-it-py` for Markdown parsing.
 
 ## 2. CLI
+
+Invocation:
 
 ```text
 markdown-stats TARGET
 ```
 
-`TARGET` is the Markdown file. Write the report to stdout and diagnostics to stderr. Success exits `0`; invalid CLI usage or an unreadable/invalid target exits nonzero.
+`TARGET` is the path to the Markdown file to analyze.
 
-## 3. Input and byte accounting
+Example:
 
-Read the target as raw bytes and decode a copy as UTF-8 for parsing. Accept a UTF-8 BOM. Byte counts always refer to original bytes, preserving UTF-8 multibyte characters, LF/CRLF, BOM, and final-newline state. Do not rewrite or normalize the target.
+```text
+markdown-stats docs/dev/SPEC.md
+```
 
-## 4. Parsing and hierarchy
+The report is written to stdout.
 
-Use CommonMark parsing through `markdown-it-py`. Only parser-recognized ATX/Setext headings create sections; heading-like content in fenced blocks does not.
+Diagnostics are written to stderr.
 
-The shallowest contextual heading is structural level 1. A heading belongs under the nearest preceding heading whose Markdown heading level is lower. Skipped Markdown levels do not create phantom structural levels. Sibling indexes are 1-based and scoped to each parent; paths such as `2.4.1` encode those sibling indexes.
+A successful run exits with status `0`. Invalid CLI usage or an unreadable/invalid target exits nonzero.
 
-## 5. Gross section size
+## 3. Input handling
 
-A section begins at the first byte of its heading source line and extends to, but excludes, the first byte of the next heading at the same or shallower structural depth; otherwise it extends through EOF. Parent gross size therefore includes descendants. Content before the first heading is excluded.
+Read the target file as raw bytes.
 
-Map parser source lines independently to byte offsets in the original byte stream. Do not derive final byte counts by re-encoding text slices.
+Decode a copy for Markdown parsing as UTF-8. UTF-8 BOM shall be accepted.
 
-## 6. Output
+Byte counts shall always refer to the original file bytes, not to re-encoded or newline-normalized text.
 
-Emit plain text. First list all structural-level-1 headings in document order, then each deeper level grouped by parent, preserving document order.
+Therefore byte accounting shall preserve exactly:
+
+* UTF-8 multibyte characters;
+* LF versus CRLF line endings;
+* a UTF-8 BOM, if present;
+* the presence or absence of the final newline.
+
+Do not modify, normalize, or rewrite the target.
+
+## 4. Markdown parsing
+
+Parse the decoded Markdown with `markdown-it-py` using CommonMark-compatible block parsing.
+
+Only parser-recognized heading blocks constitute headings.
+
+In particular, heading-like text inside fenced code blocks shall not create sections.
+
+Support both normal Markdown heading forms recognized by the parser, including ATX and Setext headings.
+
+For each heading retain at least:
+
+* Markdown heading level;
+* source start line;
+* rendered/plain heading text;
+* hierarchical path;
+* gross byte count.
+
+## 5. Structural hierarchy
+
+The report hierarchy is based on headings that actually occur in the document, not on an assumption that the document starts at `#`.
+
+The shallowest Markdown heading level present is structural level 1.
+
+A heading belongs beneath the nearest preceding heading having a lower Markdown heading level.
+
+If Markdown heading levels are skipped, do not invent missing intermediate sections.
+
+Example:
+
+```markdown
+## Parent
+#### Child
+```
+
+produces:
+
+```text
+1      Parent
+1.1    Child
+```
+
+The dotted path uses 1-based sibling indexes.
+
+Example:
+
+```text
+2.4.1
+```
+
+means:
+
+* second structural-level-1 section;
+* fourth child of that section;
+* first child of that subsection.
+
+## 6. Section boundaries and byte counts
+
+A section begins at the first byte of its heading source line.
+
+Its gross section extends up to, but excludes, the first byte of the next heading that is at the same structural depth or any shallower structural depth.
+
+If no such heading follows, the section extends through EOF.
+
+Therefore a parent's gross byte count includes all descendant subsections.
+
+Example:
+
+```markdown
+## A
+text
+
+### A1
+text
+
+### A2
+text
+
+## B
+text
+```
+
+The sections are:
+
+```text
+A   = start of "## A"  through byte before "## B"
+A1  = start of "### A1" through byte before "### A2"
+A2  = start of "### A2" through byte before "## B"
+B   = start of "## B" through EOF
+```
+
+Content before the first heading is not reported and is not included in any section.
+
+## 7. Source-position mapping
+
+`markdown-it-py` source maps are line-oriented. Build an independent mapping from source line number to byte offset in the original byte buffer.
+
+The mapping must correctly support:
+
+* LF;
+* CRLF;
+* a final line without a newline;
+* empty lines;
+* non-ASCII UTF-8 content.
+
+Use parser-recognized heading start lines together with this byte-offset table to derive exact section byte boundaries.
+
+Do not compute final byte counts by slicing decoded text and calling `.encode()`.
+
+## 8. Output organization
+
+Output plain text tables.
+
+First emit all structural-level-1 headings in document order.
+
+Then emit structural-level-2 headings, grouped by their parent.
+
+Continue similarly for deeper levels.
+
+Each group has a descriptive header.
+
+Top-level example:
+
+```text
+Heading level 1
+
+Path   Bytes     Heading
+1      12,481    Introduction
+2      38,194    Architecture
+3      21,705    Implementation
+```
+
+Nested example:
 
 ```text
 Heading level 2 — parent 2: Architecture
@@ -42,10 +196,108 @@ Path   Bytes     Heading
 2.2    23,202    Data model
 ```
 
-Columns are `Path`, `Bytes`, `Heading`. Right-align `Bytes`, use thousands separators, size `Path` and `Bytes` per table, and never truncate heading text. Display parsed heading text without Markdown formatting markers.
+Deeper example:
 
-If no headings exist, succeed and emit a concise indication.
+```text
+Heading level 3 — parent 2.2: Data model
 
-## 7. Acceptance
+Path    Bytes     Heading
+2.2.1    8,817    Records
+2.2.2   14,385    Indexes
+```
 
-Tests shall cover ATX and Setext headings; fenced-block false headings; normal and skipped levels; 1-based scoped paths; gross parent counts; equal/shallower termination; EOF termination; UTF-8, CRLF, BOM, and no-final-newline byte exactness; pre-heading exclusion; output grouping; column order; long headings; and CLI success/error behavior.
+The columns shall appear in this order:
+
+```text
+Path   Bytes   Heading
+```
+
+`Heading` is last because heading text may be long.
+
+Within each table:
+
+* preserve document order;
+* right-align `Bytes`;
+* format byte counts with thousands separators;
+* size `Path` and `Bytes` columns from the rows in that table;
+* do not truncate heading text.
+
+Separate table groups clearly with blank lines.
+
+## 9. Heading text
+
+Use the textual content of the parsed heading for display rather than the raw Markdown heading source.
+
+Inline Markdown syntax should not appear merely because it was used to format the heading.
+
+For example:
+
+```markdown
+## **Parser** architecture
+```
+
+should display approximately as:
+
+```text
+Parser architecture
+```
+
+Do not include the Markdown heading marker itself.
+
+## 10. Empty and unusual documents
+
+If the document contains no headings, complete successfully and emit a concise indication that no headings were found.
+
+The implementation shall also handle correctly:
+
+* a single heading;
+* heading-level jumps;
+* repeated heading text;
+* empty headings accepted by the parser;
+* fenced blocks containing `#` or Setext-like text;
+* headings immediately adjacent to one another;
+* Unicode heading text;
+* CRLF input;
+* a file without a trailing newline.
+
+## 11. Implementation constraints
+
+Keep the utility small and deterministic.
+
+Prefer a straightforward pipeline:
+
+```text
+read bytes
+→ decode Markdown
+→ parse heading tokens
+→ build line-to-byte offsets
+→ construct heading hierarchy
+→ calculate gross section boundaries
+→ group rows by structural depth and parent
+→ render report
+```
+
+Do not implement Markdown heading recognition manually.
+
+Do not use regular expressions as the authority for heading detection.
+
+Do not add MyST or Sphinx dependencies.
+
+## 12. Acceptance conditions
+
+The implementation is complete when automated tests demonstrate that:
+
+1. ordinary ATX headings are detected in source order;
+2. Setext headings are detected;
+3. apparent headings inside fenced code blocks are ignored;
+4. hierarchy paths are correct for normal and skipped heading levels;
+5. sibling numbering is 1-based and scoped to each parent;
+6. parent gross byte counts include descendant sections;
+7. section boundaries terminate at the next heading of equal or shallower structural depth;
+8. final sections terminate exactly at EOF;
+9. byte counts are exact for UTF-8, CRLF, BOM, and no-final-newline inputs;
+10. content before the first heading is excluded;
+11. output groups headings by structural level and parent;
+12. output columns are ordered `Path`, `Bytes`, `Heading`;
+13. long heading text is not truncated;
+14. headings inside fenced blocks never split sections.
